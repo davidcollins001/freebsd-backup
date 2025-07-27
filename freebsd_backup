@@ -1,0 +1,67 @@
+#!/bin/sh
+
+set -ex
+
+# Use the value of the corresponding environment variable, or the
+# default if none exists.
+: ${BACKUP_DIRS:="etc usr/local/etc var/db/pkg"}
+: ${BACKUP_ROOT:="/usr/local/freebsd-backup"}
+: ${BACKUP_HISTORY_KEEP:="7d"}  # find -mtime option
+: ${RSYNC:="/usr/local/bin/rsync"}
+: ${GPG:="/usr/bin/gpg"}
+
+BACKUP_TIMESTAMP="$(date '+%Y%m%d-%H%M')"
+BACKUP_FILE_NAME="freebsd-backup-${BACKUP_TIMESTAMP}.tar.xz"
+BACKUP_FILE_PATH="${BACKUP_ROOT}/${BACKUP_FILE_NAME}"
+
+if [ -e /usr/local/etc/freebsd_backup.conf ]; then
+	. /usr/local/etc/freebsd_backup.conf
+fi
+
+mkdir -p "${BACKUP_ROOT}"
+
+echo "-----"
+echo "${BACKUP_FILE_PATH}"
+echo "${BACKUP_DIR_NAME}"
+
+if [ -z "freebsd_custom_backup_hook" ]; then
+    freebsd_custom_backup_hook()
+    :
+else
+    tar -cJf "${BACKUP_FILE_PATH}" -C "/" ${BACKUP_DIRS}
+fi
+
+# rm -rf "${BACKUP_ROOT}"
+md5sum "${BACKUP_FILE_PATH}"
+sha1sum "${BACKUP_FILE_PATH}"
+
+if [ -n "${GPG_PASSPHRASE}" ]; then
+    # https://gnupg.org/documentation/manuals/gnupg/GPG-Esoteric-Options.html
+    # Note: Add `--pinentry-mode loopback` if using GnuPG 2.1.
+    printf '%s' "${GPG_PASSPHRASE}" |
+    ${GPG} -c --cipher-algo "${GPG_CIPHER_ALGO}" --batch --passphrase-fd 0 "${BACKUP_FILE_PATH}"
+    BACKUP_FILE_NAME+=".gpg"
+    BACKUP_FILE_PATH+=".gpg"
+    md5sum "${BACKUP_FILE_PATH}"
+    sha1sum "${BACKUP_FILE_PATH}"
+fi
+
+# Attempt uploading to all remotes, even if some fail.
+set +e
+
+success=0
+if [ -n "${RSYNC_DEST}" ]; then
+	echo "---- "
+       	echo ${RSYNC_DEST}
+	${RSYNC} -av "${BACKUP_FILE_PATH}" "${RSYNC_DEST}"
+	if [ $? -ne 0 ]; then
+		echo "Backup failed copied to destinations."
+		exit 1
+	else
+		echo "Backup successfully copied to all destinations."
+		exit 0
+	fi
+fi
+
+find ${BACKUP_ROOT} -name "freebsd-backup-*.tar.*" \
+    -mtime +${BACKUP_HISTORY_KEEP} -delete

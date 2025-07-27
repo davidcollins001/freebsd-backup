@@ -1,0 +1,2 @@
+# Backup freebsd config data hourly.
+@hourly /usr/local/bin/freebsd_backup >> /var/log/freebsd_backup.log 2>&1
