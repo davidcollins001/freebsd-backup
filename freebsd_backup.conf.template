@@ -1,0 +1,7 @@
+
+
+# pre_backup_hook() {
+#
+# }
+#
+# BACKUP_DIRS = /etc /usr/local/etc
