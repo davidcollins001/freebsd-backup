@@ -14,8 +14,8 @@ fi
 mkdir -p "${BACKUP_ROOT}"
 
 # run user defind `pre` function
-if [ ! -z `command -v pre_backup_hook` ]; then
-    pre_backup_hook
+if [ -n `command -v $pre_backup_hook` ]; then
+    eval $pre_backup_hook
 fi
 
 # check for backup more recent that full backup freq
@@ -63,3 +63,8 @@ fi
 
 find ${BACKUP_ROOT} -name "freebsd-backup-*.tar.*" \
     -mtime +${BACKUP_HISTORY_KEEP} -delete
+
+# run user defind `post` function
+if [ -n `command -v $post_backup_hook` ]; then
+    eval $post_backup_hook
+fi
